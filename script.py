@@ -35,16 +35,15 @@ class ImmowebScraper:
                 except Exception as e:
                     print(e)
                     pass
+        
+        #if results[0]['id'] != self.last_result:
+        #    self.last_result = results[0]['id']
+        #    try:
+        #        self.notify(results[0])
+        #    except Exception as e:
+        #        print(e)
+        #        pass
 
-        '''
-        if results[0]['id'] != self.last_result:
-            self.last_result = results[0]['id']
-            try:
-                self.notify(results[0])
-            except Exception as e:
-                print(e)
-                pass
-        '''
         # random sleep time in between refreshes
         random_time = random.randint(40,60)
         time.sleep(random_time)
@@ -57,9 +56,9 @@ class ImmowebScraper:
                 media = json.dumps(self.get_pictures(result))
                 if media == '[]':
                     raise
-                print('------------------------------------------------------')
-                print(media)
-                print('------------------------------------------------------')
+                #print('------------------------------------------------------')
+                #print(media)
+                #print('------------------------------------------------------')
                 response = requests.post(
                     url='https://api.telegram.org/bot{0}/sendMediaGroup'.format(token),
                     data={'chat_id': chat_id, 'media': media},
@@ -198,10 +197,6 @@ class ImmowebScraper:
         except:
             return 'error'
         return pictures
-
-
-
-
 
 
 if __name__ == '__main__':
