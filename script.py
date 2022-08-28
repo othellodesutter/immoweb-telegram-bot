@@ -8,6 +8,7 @@ class ImmowebScraper:
     def __init__(self, url):
         self.url = url
         self.last_result = ''
+        self.last_results = []
 
     def get_source_from_url(self):
         source = str(requests.get(self.url).text)
@@ -18,14 +19,32 @@ class ImmowebScraper:
         results = json_data['results']
         return results
 
+# (TO DO) DONE: api search results do not refresh one by one, but some properties at once - make list of last result ids en check every result of new results if id is in last_result list
     def update(self):
         results = self.get_results_from_source(self.get_source_from_url())
-
         # check if the current newest result is the same as the last result
+        for result in results:
+            if result['id'] not in self.last_results:
+                # wipe whole list if new result is found (otherwise the list will grow indefinitely)
+                try:
+                    self.last_results.append(result['id'])
+                    #self.last_result = result['id']
+                    # make it balances - now it give {'ok': False, 'error_code': 429, 'description': 'Too Many Requests: retry after 41', 'parameters': {'retry_after': 41}} if a lot of properties are send at same time 
+                    self.notify(result)
+                    time.sleep(60)
+                except Exception as e:
+                    print(e)
+                    pass
+
+        '''
         if results[0]['id'] != self.last_result:
             self.last_result = results[0]['id']
-            self.notify(results[0])
-        
+            try:
+                self.notify(results[0])
+            except Exception as e:
+                print(e)
+                pass
+        '''
         # random sleep time in between refreshes
         random_time = random.randint(40,60)
         time.sleep(random_time)
@@ -38,6 +57,9 @@ class ImmowebScraper:
                 media = json.dumps(self.get_pictures(result))
                 if media == '[]':
                     raise
+                print('------------------------------------------------------')
+                print(media)
+                print('------------------------------------------------------')
                 response = requests.post(
                     url='https://api.telegram.org/bot{0}/sendMediaGroup'.format(token),
                     data={'chat_id': chat_id, 'media': media},
@@ -91,7 +113,7 @@ class ImmowebScraper:
     def get_locality(self, result):
         try:
             locality = str(result['property']['location']['locality'])
-            locality = locality.replace('-','\\-')
+            locality = locality.replace('-','\\-').replace('(','\\(').replace(')','\\)')
             return locality
         except:
             return 'error'
@@ -101,6 +123,9 @@ class ImmowebScraper:
         try:
             street = str(result['property']['location']['street'])
             number = str(result['property']['location']['number'])
+            # "Bad Request: can't parse entities: Character '-' is reserved and must be escaped with the preceding '\\'"} --> to avoid problems with special characters in the address, we have to escape them
+            street = street.replace('-','\\-').replace('(','\\(').replace(')','\\)')
+            number = number.replace('-','\\-').replace('(','\\(').replace(')','\\)')
             if street != ('None' or 'null') and number != ('None' or 'null'):
                 return ' \([' + street + ' ' + number + '](https://www.google.be/maps/place/' + street + ' ' + number + ' ' + self.get_locality(result) + ')\)\.'
             elif street != ('None' or 'null') and number != 'None':
@@ -157,12 +182,13 @@ class ImmowebScraper:
         pictures = []
         try:
             picture_url = str(result['media']['pictures'][0]['largeUrl'])
-            picture_url = picture_url.split('1.')[0]
+            picture_url = picture_url.split('_1.')[0]
             for i in range (1, 10):
                 try:
-                    response = requests.get(picture_url + str(i) + '.jpg')
+                    # check if picture is not the same as the picture before (now sometimes it send media group with 10 same photos)
+                    response = requests.get(picture_url + '_' + str(i) + '.jpg')
                     if response.status_code == 200:
-                        photo = dict(type='photo', media=picture_url + str(i) + '.jpg')
+                        photo = dict(type='photo', media=picture_url + '_' + str(i) + '.jpg')
                         pictures.append(photo)
                     else:
                         break
@@ -184,6 +210,8 @@ if __name__ == '__main__':
     url = config['url']
 
     scraper = ImmowebScraper(url)
-    scraper.last_result = scraper.get_results_from_source(scraper.get_source_from_url())[0]['id']
+    #scraper.last_result = scraper.get_results_from_source(scraper.get_source_from_url())[0]['id']
+    for result in scraper.get_results_from_source(scraper.get_source_from_url()):
+        scraper.last_results.append(result['id'])
     while True:
         scraper.update()
